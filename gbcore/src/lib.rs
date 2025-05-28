@@ -15,6 +15,12 @@ pub struct CPU {
     memory: Memory,
 }
 
+impl Default for CPU {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CPU {
     pub fn new() -> Self {
         Self {
