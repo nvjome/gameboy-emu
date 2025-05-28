@@ -1,4 +1,4 @@
-# Gameboy Emulator #237
+# Game Boy Emulator #237
 
 *Because the world needs another one.*
 
