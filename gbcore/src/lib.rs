@@ -1,3 +1,8 @@
+//! Game Boy Core.
+//! 
+//! The emulation core for the CPU, memory, and IO components of the Game Boy, all through a sensible API.
+//! Expects a front end application to capture user input, supply ROM data, and render graphics.
+
 mod registers;
 mod memory;
 
@@ -7,6 +12,7 @@ use memory::Memory;
 
 const ROM_ADDR: u16 = 0x0100;
 
+// This contains all components of the CPU
 pub struct CPU {
     af: RegisterPair,
     bc: RegisterPair,
@@ -32,17 +38,18 @@ impl CPU {
         }
     }
 
+    /// Loads instructions into memory from some slice (probably a Vector)
     pub fn load_rom(&mut self, buffer: &[u8]) -> Result<()> {
         self.memory.load_rom(buffer, ROM_ADDR)
     }
 
+    /// Performs one fetch-execute cycle
     pub fn tick(&mut self) -> Result<()> {
         let opcode = self.memory.fetch_byte()?;
-        //println!("{:#04x}", opcode);
         self.execute(opcode)
     }
 
-    pub fn execute(&mut self, opcode: u8) -> Result<()> {
+    fn execute(&mut self, opcode: u8) -> Result<()> {
         // CB prefix
         if opcode == 0xCB {
             todo!()
