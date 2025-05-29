@@ -5,7 +5,7 @@
 Built in Rust. No specific goal beside learning how to do it.
 
 ## Project Structure
-This repo is a workspace with two packages:
+This repo is a Cargo workspace with two packages:
 
 ### gbcore
 
@@ -19,4 +19,5 @@ The frontend to display the graphics, handle user inputs, and load ROMS.
 
 1. Install Rust (using [Rustup](https://www.rust-lang.org/learn/get-started) is preferred)
 2. Clone this repo
-3. Run `cargo build`
+3. Build with `cargo build`
+4. Build docs with `cargo doc`
