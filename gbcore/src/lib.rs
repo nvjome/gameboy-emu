@@ -6,7 +6,7 @@
 mod registers;
 mod memory;
 
-use anyhow::Result;
+use anyhow::{anyhow, Ok, Result};
 use registers::RegisterPair;
 use memory::Memory;
 
@@ -34,13 +34,13 @@ impl CPU {
             bc: RegisterPair::new(),
             de: RegisterPair::new(),
             hl: RegisterPair::new(),
-            memory: Memory::new(),
+            memory: Memory::new(0, 0),
         }
     }
 
     /// Loads instructions into memory from some slice (probably a Vector)
     pub fn load_rom(&mut self, buffer: &[u8]) -> Result<()> {
-        self.memory.load_rom(buffer, ROM_ADDR)
+        self.memory.load_memory(buffer, ROM_ADDR)
     }
 
     /// Performs one fetch-execute cycle
@@ -52,47 +52,64 @@ impl CPU {
     fn execute(&mut self, opcode: u8) -> Result<()> {
         // CB prefix
         if opcode == 0xCB {
-            todo!()
+            blockcb(self, opcode)?;
+            return Ok(())
         }
 
-        let block_code = (opcode & 0xC0) >> 6;
+        let block_code = (opcode >> 6) & 0x03;
 
-        // Block 0 (00)
-        if block_code == 0 {
-            todo!()
+        match block_code {
+            0 => {
+                // Block 0 (00)
+                block0(self, opcode)?;
+                Ok(())
+            },
+            1 => {
+                // Block 1 (01)
+                block1(self, opcode)?;
+                Ok(())
+            },
+            2 => {
+                // Block 2 (10)
+                block2(self, opcode)?;
+                Ok(())
+            },
+            3 => {
+                // Block 3 (11)
+                block3(self, opcode)?;
+                Ok(())
+            },
+            _ => {
+                Err(anyhow!("Undefined opcode: {}", opcode))
+            }
         }
-
-        // Block 1 (01)
-        if block_code == 1 {
-            todo!()
-        }
-
-        // Block 2 (10)
-        if block_code == 2 {
-            todo!()
-        }
-
-        // Block 3 (11)
-        if block_code == 3 {
-            todo!()
-        }
-
-        todo!()
     }
 }
 
-fn block0(cpu: &mut CPU, opcode: u8) {
-
+fn blockcb(cpu: &mut CPU, opcode: u8) -> Result<()> {
+    todo!()
 }
 
-fn block1(cpu: &mut CPU, opcode: u8) {
-
+fn block0(cpu: &mut CPU, opcode: u8) -> Result<()> {
+    match opcode {
+        0x00 => {
+            // NOP
+        },
+        _ => {
+            return Err(anyhow!("Undefined opcode: {}", opcode))
+        }
+    }
+    Ok(())
 }
 
-fn block2(cpu: &mut CPU, opcode: u8) {
-
+fn block1(cpu: &mut CPU, opcode: u8) -> Result<()> {
+    todo!()
 }
 
-fn block3(cpu: &mut CPU, opcode: u8) {
+fn block2(cpu: &mut CPU, opcode: u8) -> Result<()> {
+    todo!()
+}
 
+fn block3(cpu: &mut CPU, opcode: u8) -> Result<()> {
+    todo!()
 }

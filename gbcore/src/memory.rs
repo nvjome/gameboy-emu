@@ -1,25 +1,30 @@
 use anyhow::{anyhow, Result};
 
 const MEM_SIZE: usize = 0x10000;
-const ROM_SIZE: usize = 0x8000;
 
 pub struct Memory {
-    pub ram: [u8; MEM_SIZE],
+    ram: [u8; MEM_SIZE],
     pub program_counter: u16,
     pub stack_pointer: u16,
 }
 
+impl Default for Memory {
+    fn default() -> Self {
+        Self::new(0, 0)
+    }
+}
+
 impl Memory {
-    pub fn new() -> Self {
+    pub fn new(program_counter: u16, stack_pointer: u16) -> Self {
         Self {
             ram: [0; MEM_SIZE],
-            program_counter: 0,
-            stack_pointer: 0,
+            program_counter,
+            stack_pointer,
         }
     }
 
-    pub fn load_rom(&mut self, buffer: &[u8], start_addr: u16) -> Result<()> {
-        if buffer.len() > ROM_SIZE {
+    pub fn load_memory(&mut self, buffer: &[u8], start_addr: u16) -> Result<()> {
+        if buffer.len() > MEM_SIZE - (start_addr as usize) {
             return Err(anyhow!("Program size exceeds ROM capacity"))
         }
         let start = start_addr as usize;
@@ -30,15 +35,15 @@ impl Memory {
     }
 
     pub fn fetch_byte(&mut self) -> Result<u8> {
-        if (self.program_counter as usize) < self.ram.len() {
-            let byte = self.ram[self.program_counter as usize];
-            match self.program_counter.checked_add(1) {
-                Some(x) => self.program_counter = x,
-                None => return Err(anyhow!("Program counter overflow"))
-            }
-            Ok(byte)
-        } else {
-            Err(anyhow!("Program counter is out of bounds: {}", self.program_counter))
+        match self.ram.get(self.program_counter as usize) {
+            Some(byte) => {
+                match self.program_counter.checked_add(1) {
+                    Some(x) => self.program_counter = x,
+                    None => return Err(anyhow!("Program counter overflow"))
+                }
+                Ok(*byte)
+            },
+            None => Err(anyhow!("Program counter is out of bounds: {}", self.program_counter))
         }
     }
 
@@ -49,10 +54,9 @@ impl Memory {
     }
 
     pub fn read_byte(&self, address: u16) -> Result<u8> {
-        if (address as usize) < self.ram.len() {
-            Ok(self.ram[address as usize])
-        } else {
-            Err(anyhow!("Attempted to read outside of RAM at address: {}", address ))
+        match self.ram.get(address as usize) {
+            Some(byte) => Ok(*byte),
+            None => Err(anyhow!("Attempted to read outside of RAM at address: {}", address ))
         }
     }
 
@@ -63,11 +67,12 @@ impl Memory {
     }
 
     pub fn write_byte(&mut self, address: u16, data: u8) -> Result<()> {
-        if (address as usize) < self.ram.len() {
-            self.ram[address as usize] = data;
-            Ok(())
-        } else {
-            Err(anyhow!("Attempted to read outside of RAM at address: {}", address ))
+        match self.ram.get_mut(address as usize) {
+            Some(byte) => {
+                *byte = data;
+                Ok(())
+            },
+            None => Err(anyhow!("Attempted to write outside of RAM at address: {}", address ))
         }
     }
 
