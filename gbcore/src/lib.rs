@@ -5,6 +5,7 @@
 
 mod registers;
 mod memory;
+mod instructions;
 
 use anyhow::{anyhow, Ok, Result};
 use registers::RegisterPair;
@@ -52,7 +53,7 @@ impl CPU {
     fn execute(&mut self, opcode: u8) -> Result<()> {
         // CB prefix
         if opcode == 0xCB {
-            blockcb(self, opcode)?;
+            instructions::blockcb(self, opcode)?;
             return Ok(())
         }
 
@@ -61,22 +62,22 @@ impl CPU {
         match block_code {
             0 => {
                 // Block 0 (00)
-                block0(self, opcode)?;
+                instructions::block0(self, opcode)?;
                 Ok(())
             },
             1 => {
                 // Block 1 (01)
-                block1(self, opcode)?;
+                instructions::block1(self, opcode)?;
                 Ok(())
             },
             2 => {
                 // Block 2 (10)
-                block2(self, opcode)?;
+                instructions::block2(self, opcode)?;
                 Ok(())
             },
             3 => {
                 // Block 3 (11)
-                block3(self, opcode)?;
+                instructions::block3(self, opcode)?;
                 Ok(())
             },
             _ => {
@@ -84,32 +85,4 @@ impl CPU {
             }
         }
     }
-}
-
-fn blockcb(cpu: &mut CPU, opcode: u8) -> Result<()> {
-    todo!()
-}
-
-fn block0(cpu: &mut CPU, opcode: u8) -> Result<()> {
-    match opcode {
-        0x00 => {
-            // NOP
-        },
-        _ => {
-            return Err(anyhow!("Undefined opcode: {}", opcode))
-        }
-    }
-    Ok(())
-}
-
-fn block1(cpu: &mut CPU, opcode: u8) -> Result<()> {
-    todo!()
-}
-
-fn block2(cpu: &mut CPU, opcode: u8) -> Result<()> {
-    todo!()
-}
-
-fn block3(cpu: &mut CPU, opcode: u8) -> Result<()> {
-    todo!()
 }
