@@ -13,7 +13,7 @@ use memory::Memory;
 
 const ROM_ADDR: u16 = 0x0100;
 
-// This contains all components of the CPU
+/// This contains all components of the CPU
 pub struct CPU {
     af: RegisterPair,
     bc: RegisterPair,
@@ -53,7 +53,8 @@ impl CPU {
     fn execute(&mut self, opcode: u8) -> Result<()> {
         // CB prefix
         if opcode == 0xCB {
-            instructions::blockcb(self, opcode)?;
+            let opcode2 = self.memory.fetch_byte()?;
+            instructions::blockcb(self, opcode2)?;
             return Ok(())
         }
 
