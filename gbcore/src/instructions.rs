@@ -9,13 +9,7 @@ use crate::CPU;
 use anyhow::{anyhow, Result};
 use bitmatch::bitmatch;
 
-/// Block CB contains some assorted instructions with 2 distinct patterns.
-/// These instructions are only accessible using the prefix byte 0xCB.
-pub(super) fn blockcb(cpu: &mut CPU, opcode: u8) -> Result<()> {
-    todo!()
-}
-
-/// Block 0 contains an assortment of instructions
+/// Block 0 contains an assortment of instructions.
 #[bitmatch]
 pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<()> {
     #[bitmatch]
@@ -85,7 +79,7 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<()> {
     Ok(())
 }
 
-/// Block 1 contains 8-bit register loads with an easily decoded pattern
+/// Block 1 contains 8-bit register loads with an easily decoded pattern.
 #[bitmatch]
 pub(super) fn block1(cpu: &mut CPU, opcode: u8) -> Result<()> {
     #[bitmatch]
@@ -177,7 +171,7 @@ pub(super) fn block1(cpu: &mut CPU, opcode: u8) -> Result<()> {
     Ok(())
 }
 
-/// Block 2 contains 8-bit arithmetic with an easily decoded pattern
+/// Block 2 contains 8-bit arithmetic with an easily decoded pattern.
 #[bitmatch]
 pub(super) fn block2(cpu: &mut CPU, opcode: u8) -> Result<()> {
     #[bitmatch]
@@ -219,7 +213,7 @@ pub(super) fn block2(cpu: &mut CPU, opcode: u8) -> Result<()> {
     Ok(())
 }
 
-/// Block 3 again contains an assortment instructions
+/// Block 3 again contains an assortment of instructions.
 #[bitmatch]
 pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<()> {
     #[bitmatch]
@@ -227,4 +221,10 @@ pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<()> {
         _ => return Err(anyhow!("Undefined opcode: {}", opcode))
     }
     Ok(())
+}
+
+/// Block CB contains an assortment of instructions with 2 distinct decoding patterns.
+/// These instructions are only accessible using the prefix byte 0xCB.
+pub(super) fn blockcb(cpu: &mut CPU, opcode: u8) -> Result<()> {
+    todo!()
 }
