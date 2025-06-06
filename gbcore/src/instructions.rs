@@ -5,7 +5,7 @@
 //! Luckily, the bitmatch crate can help with the pattern matching!
 //! The efficiency impact of this is uncertain, but it sure is convenient.
 
-use crate::CPU;
+use crate::{memory, CPU};
 use anyhow::{anyhow, Result};
 use bitmatch::bitmatch;
 
@@ -85,6 +85,7 @@ pub(super) fn block1(cpu: &mut CPU, opcode: u8) -> Result<()> {
     #[bitmatch]
     let "??dddsss" = opcode;
     // let (destr8, srcr8) = ((opcode >> 3) & 0x7, opcode & 0x7);
+
     match (d, s) {
         // LD b, r8
         (0, 0) => (),
@@ -218,6 +219,122 @@ pub(super) fn block2(cpu: &mut CPU, opcode: u8) -> Result<()> {
 pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<()> {
     #[bitmatch]
     match opcode {
+        "11000110" => { // ADD a, imm8
+            todo!()
+        },
+
+        "11001110" => { // ADD a, imm8
+            todo!()
+        },
+
+        "11010110" => { // SUB a, imm8
+            todo!()
+        },
+
+        "11011110" => { // SBC a, imm8
+            todo!()
+        },
+
+        "11100110" => { // AND a, imm8
+            todo!()
+        },
+
+        "11101110" => { // XOR a, imm8
+            todo!()
+        },
+
+        "11110110" => { // OR a, imm8
+            todo!()
+        },
+
+        "11111110" => { // CP a, imm8
+            todo!()
+        },
+
+        "110ccc000" => { // RET cond
+            todo!()
+        },
+
+        "11001001" => { // RET
+            todo!()
+        },
+
+        "11011001" => { // RETI
+            todo!()
+        },
+
+        "110cc010" => { // JP cond, imm16
+            todo!()
+        },
+
+        "11101001" => { // JP hl
+            todo!()
+        },
+
+        "110cc100" => { // CALL cond, imm16
+            todo!()
+        },
+
+        "11001101" => { // CALL imm16
+            todo!()
+        },
+
+        "11ttt111" => { // RST tgt3
+            todo!()
+        },
+
+        "11rr0001" => { // POP r16stk
+            todo!()
+        },
+
+        "11rr0101" => { // PUSH r16stk
+            todo!()
+        },
+
+        "11100010" => { // LDH [c], a
+            todo!()
+        },
+
+        "11100000" => { // LDH [imm8], a
+            todo!()
+        },
+
+        "11101010" => { // LD [imm16], a
+            todo!()
+        },
+
+        "11110010" => { // LDH a, [c]
+            todo!()
+        },
+
+        "11110000" => { // LDH a, [imm8]
+            todo!()
+        },
+
+        "11111010" => { // LD a, [imm16]
+            todo!()
+        },
+
+        "11101000" => { // ADD sp, imm8
+            todo!()
+        },
+
+        "11111000" => { // LD hl, sp + imm8
+            todo!()
+        },
+
+        "11111001" => { // LD sp, hl
+            todo!()
+        },
+
+        "11110011" => { // DI
+            todo!()
+        },
+
+        "11111011" => { // EI
+            todo!()
+        },
+
         _ => return Err(anyhow!("Undefined opcode: {}", opcode))
     }
     Ok(())
@@ -225,6 +342,55 @@ pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<()> {
 
 /// Block CB contains an assortment of instructions with 2 distinct decoding patterns.
 /// These instructions are only accessible using the prefix byte 0xCB.
+#[bitmatch]
 pub(super) fn blockcb(cpu: &mut CPU, opcode: u8) -> Result<()> {
-    todo!()
+    #[bitmatch]
+    match opcode {
+        "00000ooo" => { // RLC r8
+            todo!()
+        },
+
+        "00001ooo" => { // RRC r8
+            todo!()
+        },
+
+        "00010ooo" => { // RL r8
+            todo!()
+        },
+
+        "00011ooo" => { // RR r8
+            todo!()
+        },
+
+        "00100ooo" => { // SLA r8
+            todo!()
+        },
+
+        "00101ooo" => { // SRA r8
+            todo!()
+        },
+
+        "00110ooo" => { // SWAP r8
+            todo!()
+        },
+
+        "00111ooo" => { // SRL r8
+            todo!()
+        },
+
+        "01iiiooo" => { // BIT b3, r8
+            todo!()
+        },
+
+        "10iiiooo" => { // RES b3, r8
+            todo!()
+        },
+
+        "11iiiooo" => { // SET b3, r8
+            todo!()
+        },
+
+        _ => return Err(anyhow!("Undefined opcode: {}", opcode))
+    }
+    Ok(())
 }
