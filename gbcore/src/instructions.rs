@@ -81,10 +81,10 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<()> {
 
 /// Block 1 contains 8-bit register loads with an easily decoded pattern.
 #[bitmatch]
-pub(super) fn block1(cpu: &mut CPU, opcode: u8) -> Result<()> {
+pub(super) fn block1(cpu: &mut CPU, opcode: u8) -> Result<i32> {
     #[bitmatch]
     let "??dddsss" = opcode;
-    // let (destr8, srcr8) = ((opcode >> 3) & 0x7, opcode & 0x7);
+    let mut cycles: i32 = 4;
 
     match (d, s) {
         // LD b, r8
@@ -94,7 +94,7 @@ pub(super) fn block1(cpu: &mut CPU, opcode: u8) -> Result<()> {
         (0, 3) => cpu.bc.high = cpu.de.low,
         (0, 4) => cpu.bc.high = cpu.hl.high,
         (0, 5) => cpu.bc.high = cpu.hl.low,
-        (0, 6) => cpu.bc.high = cpu.memory.read_byte(cpu.hl.get_pair())?,
+        (0, 6) => {cpu.bc.high = cpu.memory.read_byte(cpu.hl.get_pair())?; cycles = 8;},
         (0, 7) => cpu.bc.high = cpu.af.high,
 
         // LD c, r8
@@ -104,7 +104,7 @@ pub(super) fn block1(cpu: &mut CPU, opcode: u8) -> Result<()> {
         (1, 3) => cpu.bc.low = cpu.de.low,
         (1, 4) => cpu.bc.low = cpu.hl.high,
         (1, 5) => cpu.bc.low = cpu.hl.low,
-        (1, 6) => cpu.bc.low = cpu.memory.read_byte(cpu.hl.get_pair())?,
+        (1, 6) => {cpu.bc.low = cpu.memory.read_byte(cpu.hl.get_pair())?; cycles = 8;},
         (1, 7) => cpu.bc.low = cpu.af.high,
 
         // LD d, r8
@@ -114,7 +114,7 @@ pub(super) fn block1(cpu: &mut CPU, opcode: u8) -> Result<()> {
         (2, 3) => cpu.de.high = cpu.de.low,
         (2, 4) => cpu.de.high = cpu.hl.high,
         (2, 5) => cpu.de.high = cpu.hl.low,
-        (2, 6) => cpu.de.high = cpu.memory.read_byte(cpu.hl.get_pair())?,
+        (2, 6) => {cpu.de.high = cpu.memory.read_byte(cpu.hl.get_pair())?; cycles = 8;},
         (2, 7) => cpu.de.high = cpu.af.high,
 
         // LD e, r8
@@ -124,7 +124,7 @@ pub(super) fn block1(cpu: &mut CPU, opcode: u8) -> Result<()> {
         (3, 3) => (),
         (3, 4) => cpu.de.low = cpu.hl.high,
         (3, 5) => cpu.de.low = cpu.hl.low,
-        (3, 6) => cpu.de.low = cpu.memory.read_byte(cpu.hl.get_pair())?,
+        (3, 6) => {cpu.de.low = cpu.memory.read_byte(cpu.hl.get_pair())?; cycles = 8;},
         (3, 7) => cpu.de.low = cpu.af.high,
 
         // LD h, r8
@@ -134,7 +134,7 @@ pub(super) fn block1(cpu: &mut CPU, opcode: u8) -> Result<()> {
         (4, 3) => cpu.hl.high = cpu.de.low,
         (4, 4) => (),
         (4, 5) => cpu.hl.high = cpu.hl.low,
-        (4, 6) => cpu.hl.high = cpu.memory.read_byte(cpu.hl.get_pair())?,
+        (4, 6) => {cpu.hl.high = cpu.memory.read_byte(cpu.hl.get_pair())?; cycles = 8;},
         (4, 7) => cpu.hl.high = cpu.af.high,
 
         // LD l, r8
@@ -144,18 +144,24 @@ pub(super) fn block1(cpu: &mut CPU, opcode: u8) -> Result<()> {
         (5, 3) => cpu.hl.low = cpu.de.low,
         (5, 4) => cpu.hl.low = cpu.hl.high,
         (5, 5) => (),
-        (5, 6) => cpu.hl.low = cpu.memory.read_byte(cpu.hl.get_pair())?,
+        (5, 6) => {cpu.hl.low = cpu.memory.read_byte(cpu.hl.get_pair())?; cycles = 8;},
         (5, 7) => cpu.hl.low = cpu.af.high,
 
         // LD [hl], r8
-        (6, 0) => cpu.memory.write_byte(cpu.hl.get_pair(), cpu.bc.high)?,
-        (6, 1) => cpu.memory.write_byte(cpu.hl.get_pair(), cpu.bc.low)?,
-        (6, 2) => cpu.memory.write_byte(cpu.hl.get_pair(), cpu.de.high)?,
-        (6, 3) => cpu.memory.write_byte(cpu.hl.get_pair(), cpu.de.low)?,
-        (6, 4) => cpu.memory.write_byte(cpu.hl.get_pair(), cpu.hl.high)?,
-        (6, 5) => cpu.memory.write_byte(cpu.hl.get_pair(), cpu.hl.low)?,
-        (6, 6) => todo!(), // HALT
-        (6, 7) => cpu.memory.write_byte(cpu.hl.get_pair(), cpu.af.high)?,
+        (6, _) => {
+            cycles = 8;
+            match s {
+                0 => cpu.memory.write_byte(cpu.hl.get_pair(), cpu.bc.high)?,
+                1 => cpu.memory.write_byte(cpu.hl.get_pair(), cpu.bc.low)?,
+                2 => cpu.memory.write_byte(cpu.hl.get_pair(), cpu.de.high)?,
+                3 => cpu.memory.write_byte(cpu.hl.get_pair(), cpu.de.low)?,
+                4 => cpu.memory.write_byte(cpu.hl.get_pair(), cpu.hl.high)?,
+                5 => cpu.memory.write_byte(cpu.hl.get_pair(), cpu.hl.low)?,
+                6 => todo!(), // HALT
+                7 => cpu.memory.write_byte(cpu.hl.get_pair(), cpu.af.high)?,
+                _ => return Err(anyhow!("Undefined opcode: {}", opcode))
+            }
+    },
 
         // LD a, r8
         (7, 0) => cpu.af.high = cpu.bc.high,
@@ -164,17 +170,19 @@ pub(super) fn block1(cpu: &mut CPU, opcode: u8) -> Result<()> {
         (7, 3) => cpu.af.high = cpu.de.low,
         (7, 4) => cpu.af.high = cpu.hl.high,
         (7, 5) => cpu.af.high = cpu.hl.low,
-        (7, 6) => cpu.af.high = cpu.memory.read_byte(cpu.hl.get_pair())?,
+        (7, 6) => {cpu.af.high = cpu.memory.read_byte(cpu.hl.get_pair())?; cycles = 8;},
         (7, 7) => (),
 
         (_, _) => return Err(anyhow!("Undefined opcode: {}", opcode))
     }
-    Ok(())
+    Ok(cycles)
 }
 
 /// Block 2 contains 8-bit arithmetic with an easily decoded pattern.
 #[bitmatch]
-pub(super) fn block2(cpu: &mut CPU, opcode: u8) -> Result<()> {
+pub(super) fn block2(cpu: &mut CPU, opcode: u8) -> Result<i32> {
+    let mut cycles:i32 = 4;
+
     #[bitmatch]
     match opcode {
         "10000ooo" => { // ADD a, r8
@@ -211,12 +219,12 @@ pub(super) fn block2(cpu: &mut CPU, opcode: u8) -> Result<()> {
 
         _ => return Err(anyhow!("Undefined opcode: {}", opcode))
     }
-    Ok(())
+    Ok(cycles)
 }
 
 /// Block 3 again contains an assortment of instructions.
 #[bitmatch]
-pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<()> {
+pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<i32> {
     #[bitmatch]
     match opcode {
         "11000110" => { // ADD a, imm8
@@ -292,7 +300,8 @@ pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<()> {
         },
 
         "11100010" => { // LDH [c], a
-            todo!()
+            cpu.memory.write_byte(0xFF00 + cpu.bc.low as u16, cpu.af.high)?;
+            Ok(8)
         },
 
         "11100000" => { // LDH [imm8], a
@@ -300,19 +309,27 @@ pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<()> {
         },
 
         "11101010" => { // LD [imm16], a
-            todo!()
+            let addr = cpu.memory.fetch_two_bytes()?;
+            if (0xFF00..=0xFFFF).contains(&addr) {
+                cpu.memory.write_byte(addr, cpu.af.high)?;
+            }
+            Ok(16)
         },
 
         "11110010" => { // LDH a, [c]
-            todo!()
+            cpu.af.high = cpu.memory.read_byte(0xFF00 + cpu.bc.low as u16)?;
+            Ok(8)
         },
 
         "11110000" => { // LDH a, [imm8]
-            todo!()
+            cpu.af.high = cpu.memory.fetch_byte()?;
+            Ok(12)
         },
 
         "11111010" => { // LD a, [imm16]
-            todo!()
+            let addr = cpu.memory.fetch_two_bytes()?;
+            cpu.af.high = cpu.memory.read_byte(addr)?;
+            Ok(16)
         },
 
         "11101000" => { // ADD sp, imm8
@@ -324,7 +341,8 @@ pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<()> {
         },
 
         "11111001" => { // LD sp, hl
-            todo!()
+            cpu.memory.stack_pointer = cpu.hl.get_pair();
+            Ok(8)
         },
 
         "11110011" => { // DI
@@ -337,13 +355,13 @@ pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<()> {
 
         _ => return Err(anyhow!("Undefined opcode: {}", opcode))
     }
-    Ok(())
 }
 
 /// Block CB contains an assortment of instructions with 2 distinct decoding patterns.
 /// These instructions are only accessible using the prefix byte 0xCB.
 #[bitmatch]
-pub(super) fn blockcb(cpu: &mut CPU, opcode: u8) -> Result<()> {
+pub(super) fn blockcb(cpu: &mut CPU, opcode: u8) -> Result<i32> {
+    let mut cycles: i32 = 8;
     #[bitmatch]
     match opcode {
         "00000ooo" => { // RLC r8
@@ -392,5 +410,5 @@ pub(super) fn blockcb(cpu: &mut CPU, opcode: u8) -> Result<()> {
 
         _ => return Err(anyhow!("Undefined opcode: {}", opcode))
     }
-    Ok(())
+    Ok(cycles)
 }
