@@ -45,17 +45,18 @@ impl CPU {
     }
 
     /// Performs one fetch-execute cycle
-    pub fn tick(&mut self) -> Result<()> {
+    pub fn tick(&mut self) -> Result<i32> {
         let opcode = self.memory.fetch_byte()?;
-        self.execute(opcode)
+        let cycles = self.execute(opcode)? / 4;
+        Ok(cycles)
     }
 
-    fn execute(&mut self, opcode: u8) -> Result<()> {
+    fn execute(&mut self, opcode: u8) -> Result<i32> {
         // CB prefix
         if opcode == 0xCB {
             let opcode2 = self.memory.fetch_byte()?;
-            instructions::blockcb(self, opcode2)?;
-            return Ok(())
+            let tcycles = instructions::blockcb(self, opcode2)?;
+            return Ok(tcycles)
         }
 
         let block_code = (opcode >> 6) & 0x03;
@@ -63,23 +64,23 @@ impl CPU {
         match block_code {
             0 => {
                 // Block 0 (00)
-                instructions::block0(self, opcode)?;
-                Ok(())
+                let tcycles = instructions::block0(self, opcode)?;
+                Ok(tcycles)
             },
             1 => {
                 // Block 1 (01)
-                instructions::block1(self, opcode)?;
-                Ok(())
+                let tcycles = instructions::block1(self, opcode)?;
+                Ok(tcycles)
             },
             2 => {
                 // Block 2 (10)
-                instructions::block2(self, opcode)?;
-                Ok(())
+                let tcycles = instructions::block2(self, opcode)?;
+                Ok(tcycles)
             },
             3 => {
                 // Block 3 (11)
-                instructions::block3(self, opcode)?;
-                Ok(())
+                let tcycles = instructions::block3(self, opcode)?;
+                Ok(tcycles)
             },
             _ => {
                 Err(anyhow!("Undefined opcode: {}", opcode))

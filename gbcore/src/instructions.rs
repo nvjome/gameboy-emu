@@ -11,7 +11,8 @@ use bitmatch::bitmatch;
 
 /// Block 0 contains an assortment of instructions.
 #[bitmatch]
-pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<()> {
+pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
+    let mut cycles: i32 = 4;
     #[bitmatch]
     match opcode {
         "00000000" => (), // NOP
@@ -76,7 +77,7 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<()> {
 
         _ => return Err(anyhow!("Undefined opcode: {}", opcode))
     }
-    Ok(())
+    Ok(cycles)
 }
 
 /// Block 1 contains 8-bit register loads with an easily decoded pattern.
