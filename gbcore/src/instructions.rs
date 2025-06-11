@@ -29,7 +29,7 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
                 1 => cpu.de.set_pair(cpu.memory.fetch_two_bytes()?),
                 2 => cpu.hl.set_pair(cpu.memory.fetch_two_bytes()?),
                 3 => cpu.memory.stack_pointer = cpu.memory.fetch_two_bytes()?,
-                _ => return Err(anyhow!("Undefined opcode: {}", opcode))
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", d, 2))
             }
             cycles = 3;
         },
@@ -54,7 +54,7 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
                     cpu.memory.write_byte(addr, cpu.af.high)?;
                     cpu.hl.decr_pair();
                 }
-                _ => return Err(anyhow!("Undefined opcode: {}", opcode))
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", d, 2))
             }
         },
 
@@ -70,7 +70,7 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
                     cpu.af.set_pair(cpu.memory.read_two_bytes(cpu.hl.get_pair())?);
                     cpu.hl.decr_pair();
                 },
-                _ => return Err(anyhow!("Undefined opcode: {}", opcode))
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", s, 2))
             }
         },
 
@@ -94,7 +94,7 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
                 1 => add16(cpu.hl.get_pair(), cpu.de.get_pair()),
                 2 => add16(cpu.hl.get_pair(), cpu.hl.get_pair()),
                 3 => add16(cpu.hl.get_pair(), cpu.memory.stack_pointer),
-                _ => return Err(anyhow!("Undefined opcode: {}", opcode))
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", o, 2))
             };
             cpu.hl.set_pair(result);
             cpu.af.low = flags;
@@ -122,7 +122,7 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
                     cycles = 3
                 },
                 7 => cpu.hl.high = cpu.memory.fetch_byte()?,
-                _ => return Err(anyhow!("Undefined opcode: {}", opcode))
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", d, 3))
             }
         },
 
@@ -147,7 +147,9 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
         },
 
         "00101111" => { // CPL
-            todo!()
+            cpu.af.high = !cpu.af.high;
+            cpu.af.low |= (SUB_FLAG & HALF_CARRY_FLAG);
+            cycles = 1;
         },
 
         "00110111" => { // SCF
@@ -177,7 +179,7 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
                 (2, f) if (f & CARRY_FLAG == 0) => cpu.memory.program_counter = cpu.memory.program_counter.wrapping_add_signed(val),
                 (3, f) if (f & CARRY_FLAG > 0) => cpu.memory.program_counter = cpu.memory.program_counter.wrapping_add_signed(val),
                 (0..=3, _) => cycles = 2,
-                _ => return Err(anyhow!("Undefined opcode: {}", opcode))
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", c, 2))
             }
         },
 
@@ -267,7 +269,7 @@ pub(super) fn block1(cpu: &mut CPU, opcode: u8) -> Result<i32> {
                 5 => cpu.memory.write_byte(cpu.hl.get_pair(), cpu.hl.low)?,
                 6 => todo!(), // HALT
                 7 => cpu.memory.write_byte(cpu.hl.get_pair(), cpu.af.high)?,
-                _ => return Err(anyhow!("Undefined opcode: {}", opcode))
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", d, 3))
             }
             cycles = 2;
         },
@@ -282,7 +284,7 @@ pub(super) fn block1(cpu: &mut CPU, opcode: u8) -> Result<i32> {
         (7, 6) => {cpu.af.high = cpu.memory.read_byte(cpu.hl.get_pair())?; cycles = 2;},
         (7, 7) => (),
 
-        (_, _) => return Err(anyhow!("Undefined opcode: {}", opcode))
+        (_, _) => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", d, 3))
     }
     Ok(cycles)
 }
@@ -303,7 +305,7 @@ pub(super) fn block2(cpu: &mut CPU, opcode: u8) -> Result<i32> {
                 5 => add8(cpu.af.high, cpu.hl.low),
                 6 => {cycles = 2; add8(cpu.af.high, cpu.memory.read_byte(cpu.hl.get_pair())?)},
                 7 => add8(cpu.af.high, cpu.af.high),
-                _ => return Err(anyhow!("Undefined opcode: {}", opcode))
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", o, 3))
             }
         },
 
@@ -321,7 +323,7 @@ pub(super) fn block2(cpu: &mut CPU, opcode: u8) -> Result<i32> {
                 5 => sub8(cpu.af.high, cpu.hl.low),
                 6 => {cycles = 2; sub8(cpu.af.high, cpu.memory.read_byte(cpu.hl.get_pair())?)},
                 7 => sub8(cpu.af.high, cpu.af.high),
-                _ => return Err(anyhow!("Undefined opcode: {}", opcode))
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", o, 3))
             };
         },
 
@@ -362,15 +364,20 @@ pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<i32> {
         },
 
         "11001110" => { // ADC a, imm8
-            todo!()
+            let carry = ((cpu.af.low & CARRY_FLAG) != 0) as u8;
+            (cpu.af.high, cpu.af.low) = adc8(cpu.af.high, cpu.memory.fetch_byte()?, carry);
+            cycles = 2;
         },
 
         "11010110" => { // SUB a, imm8
-            todo!()
+            (cpu.af.high, cpu.af.low) = sub8(cpu.af.high, cpu.memory.fetch_byte()?);
+            cycles = 2;
         },
 
         "11011110" => { // SBC a, imm8
-            todo!()
+            let carry = ((cpu.af.low & CARRY_FLAG) != 0) as u8;
+            (cpu.af.high, cpu.af.low) = sbc8(cpu.af.high, cpu.memory.fetch_byte()?, carry);
+            cycles = 2;
         },
 
         "11100110" => { // AND a, imm8
@@ -410,7 +417,7 @@ pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<i32> {
                 (2, f) if (f & CARRY_FLAG == 0) => cpu.memory.program_counter = addr,
                 (3, f) if (f & CARRY_FLAG > 0) => cpu.memory.program_counter = addr,
                 (0..=3, _) =>cycles = 3,
-                _ => return Err(anyhow!("Undefined opcode: {}", opcode))
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", c, 2))
             }
         },
 
@@ -436,11 +443,27 @@ pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<i32> {
         },
 
         "11rr0001" => { // POP r16stk
-            todo!()
+            let data = cpu.memory.pop_stack()?;
+            match r {
+                0 => cpu.bc.set_pair(data),
+                1 => cpu.de.set_pair(data),
+                2 => cpu.hl.set_pair(data),
+                3 => cpu.af.set_pair(data),
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", r, 2))
+            }
+            cycles = 3;
         },
 
         "11rr0101" => { // PUSH r16stk
-            todo!()
+            let data = match r {
+                0 => cpu.bc.get_pair(),
+                1 => cpu.de.get_pair(),
+                2 => cpu.hl.get_pair(),
+                3 => cpu.af.get_pair(),
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", r, 2))
+            };
+            cpu.memory.push_stack(data)?;
+            cycles = 4;
         },
 
         "11100010" => { // LDH [c], a
@@ -582,12 +605,36 @@ fn add8(lhs: u8, rhs: u8) -> (u8, u8) {
     (result, flags)
 }
 
+// Add two unsigned 8-bit values and a carry value, returning a tuple with the result and flags.
+#[bitmatch]
+fn adc8(lhs: u8, rhs: u8, carry: u8) -> (u8, u8) {
+    // let carry = carry & 0x01; // Mask the carry to only the LSB
+    let result = lhs.wrapping_add(rhs).wrapping_add(carry);
+    let c = (((lhs as u16 & 0xFF) + (rhs as u16 & 0xFF) + (carry as u16)) >> 8) as u8;
+    let h = ((lhs & 0xF) + (rhs & 0xF) + carry) >> 4;
+    let z: u8 = match result {0 => 0, _ => 1};
+    let flags = bitpack!("z0hc0000");
+    (result, flags)
+}
+
 // Subtract two unsigned 8-bit values, returning a tuple with the result and flags.
 #[bitmatch]
 fn sub8(lhs: u8, rhs: u8) -> (u8, u8) {
     let result = lhs.wrapping_sub(rhs);
     let c: u8 = match rhs > lhs {true => 1, false => 0};
     let h: u8 = match (rhs & 0xF) > (lhs & 0xF) {true => 1, false => 0};
+    let z: u8 = match result {0 => 0, _ => 1};
+    let flags = bitpack!("z1hc0000");
+    (result, flags)
+}
+
+// Subtract two unsigned 8-bit values and a carry value, returning a tuple with the result and flags.
+#[bitmatch]
+fn sbc8(lhs: u8, rhs: u8, carry: u8) -> (u8, u8) {
+    // let carry = carry & 0x01; // Mask the carry to only the LSB
+    let result = lhs.wrapping_sub(rhs).wrapping_sub(carry);
+    let c: u8 = match (rhs as u16 + carry as u16) > lhs as u16 {true => 1, false => 0};
+    let h: u8 = match ((rhs + carry) & 0xF) > (lhs & 0xF) {true => 1, false => 0};
     let z: u8 = match result {0 => 0, _ => 1};
     let flags = bitpack!("z1hc0000");
     (result, flags)
