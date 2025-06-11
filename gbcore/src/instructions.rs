@@ -18,9 +18,10 @@ const CARRY_FLAG: u8 = 1 << 4;
 /// Returns the passed time in machine cycles.
 #[bitmatch]
 pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
+    let mut cycles = 2;
     #[bitmatch]
     match opcode {
-        "00000000" => Ok(1), // NOP
+        "00000000" => cycles = 1, // NOP
 
         "00dd0001" => { // LD r16, imm16
             match d {
@@ -30,7 +31,7 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
                 3 => cpu.memory.stack_pointer = cpu.memory.fetch_two_bytes()?,
                 _ => return Err(anyhow!("Undefined opcode: {}", opcode))
             }
-            Ok(3)
+            cycles = 3;
         },
 
         "00dd0010" => { // LD [r16mem], a
@@ -55,7 +56,6 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
                 }
                 _ => return Err(anyhow!("Undefined opcode: {}", opcode))
             }
-            Ok(2)
         },
 
         "00ss1010" => { // LD a, [r16mem]
@@ -72,13 +72,12 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
                 },
                 _ => return Err(anyhow!("Undefined opcode: {}", opcode))
             }
-            Ok(2)
         },
 
         "00001000" => { // LD [imm16], sp
             let addr = cpu.memory.fetch_two_bytes()?;
             cpu.memory.write_two_bytes(addr, cpu.memory.stack_pointer)?;
-            Ok(5)
+            cycles = 5;
         },
 
         "00oo0011" => { // INC r16
@@ -99,7 +98,6 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
             };
             cpu.hl.set_pair(result);
             cpu.af.low = flags;
-            Ok(8)
         },
 
         "11ooo100" => { // INC r8
@@ -111,7 +109,6 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
         },
 
         "00ddd110" => { // LD r8, imm8
-            let mut cycles = 2;
             match d {
                 0 => cpu.bc.high = cpu.memory.fetch_byte()?,
                 1 => cpu.bc.low = cpu.memory.fetch_byte()?,
@@ -127,7 +124,6 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
                 7 => cpu.hl.high = cpu.memory.fetch_byte()?,
                 _ => return Err(anyhow!("Undefined opcode: {}", opcode))
             }
-            Ok(cycles)
         },
 
         "00000111" => { // RLCA
@@ -157,28 +153,39 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
         "00110111" => { // SCF
             cpu.af.low |= CARRY_FLAG;
             cpu.af.low &= !(SUB_FLAG & HALF_CARRY_FLAG);
-            Ok(1)
+            cycles = 1;
         },
 
         "00111111" => { // CCF
             cpu.af.low ^= CARRY_FLAG;
             cpu.af.low &= !(SUB_FLAG & HALF_CARRY_FLAG);
-            Ok(1)
+            cycles = 1;
         },
 
         "00011000" => { //JR imm8
-            todo!()
+            let val = cpu.memory.fetch_byte()? as i8 as i16;
+            cpu.memory.program_counter = cpu.memory.program_counter.wrapping_add_signed(val);
+            cycles = 3;
         },
 
         "001cc000" => { // JR cond, imm8
-            todo!()
+            let val = cpu.memory.fetch_byte()? as i8 as i16;
+            cycles = 3;
+            match (c, cpu.af.low) {
+                (0, f) if (f & ZERO_FLAG == 0) => cpu.memory.program_counter = cpu.memory.program_counter.wrapping_add_signed(val),
+                (1, f) if (f & ZERO_FLAG > 0) => cpu.memory.program_counter = cpu.memory.program_counter.wrapping_add_signed(val),
+                (2, f) if (f & CARRY_FLAG == 0) => cpu.memory.program_counter = cpu.memory.program_counter.wrapping_add_signed(val),
+                (3, f) if (f & CARRY_FLAG > 0) => cpu.memory.program_counter = cpu.memory.program_counter.wrapping_add_signed(val),
+                (0..=3, _) => cycles = 2,
+                _ => return Err(anyhow!("Undefined opcode: {}", opcode))
+            }
         },
 
         "00010000" => todo!(), // STOP
 
-        _ => Err(anyhow!("Undefined opcode: {}", opcode))
+        _ => return Err(anyhow!("Undefined opcode: {}", opcode))
     }
-    // Ok(cycles)
+    Ok(cycles)
 }
 
 /// Block 1 contains 8-bit register loads with an easily decoded pattern.
@@ -305,7 +312,17 @@ pub(super) fn block2(cpu: &mut CPU, opcode: u8) -> Result<i32> {
         },
 
         "10010ooo" => { // SUB a, r8
-            todo!()
+            (cpu.af.high, cpu.af.low) = match o {
+                0 => sub8(cpu.af.high, cpu.bc.high),
+                1 => sub8(cpu.af.high, cpu.bc.low),
+                2 => sub8(cpu.af.high, cpu.de.high),
+                3 => sub8(cpu.af.high, cpu.de.low),
+                4 => sub8(cpu.af.high, cpu.hl.high),
+                5 => sub8(cpu.af.high, cpu.hl.low),
+                6 => {cycles = 2; sub8(cpu.af.high, cpu.memory.read_byte(cpu.hl.get_pair())?)},
+                7 => sub8(cpu.af.high, cpu.af.high),
+                _ => return Err(anyhow!("Undefined opcode: {}", opcode))
+            };
         },
 
         "10011ooo" => { // SBC a, r8
@@ -336,11 +353,12 @@ pub(super) fn block2(cpu: &mut CPU, opcode: u8) -> Result<i32> {
 /// Block 3 again contains an assortment of instructions.
 #[bitmatch]
 pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<i32> {
+    let mut cycles = 1;
     #[bitmatch]
     match opcode {
         "11000110" => { // ADD a, imm8
             (cpu.af.high, cpu.af.low) = add8(cpu.af.high, cpu.memory.fetch_byte()?);
-            Ok(2)
+            cycles = 2;
         },
 
         "11001110" => { // ADC a, imm8
@@ -384,11 +402,25 @@ pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<i32> {
         },
 
         "110cc010" => { // JP cond, imm16
-            todo!()
+            let addr = cpu.memory.fetch_two_bytes()?;
+            cycles = 4;
+            match (c, cpu.af.low) {
+                (0, f) if (f & ZERO_FLAG == 0) => cpu.memory.program_counter = addr,
+                (1, f) if (f & ZERO_FLAG > 0) => cpu.memory.program_counter = addr,
+                (2, f) if (f & CARRY_FLAG == 0) => cpu.memory.program_counter = addr,
+                (3, f) if (f & CARRY_FLAG > 0) => cpu.memory.program_counter = addr,
+                (0..=3, _) =>cycles = 3,
+                _ => return Err(anyhow!("Undefined opcode: {}", opcode))
+            }
+        },
+
+        "11000011" => { // JP imm16
+            cpu.memory.program_counter = cpu.memory.fetch_two_bytes()?;
+            cycles = 4;
         },
 
         "11101001" => { // JP hl
-            todo!()
+            cpu.memory.program_counter = cpu.hl.get_pair();
         },
 
         "110cc100" => { // CALL cond, imm16
@@ -413,13 +445,13 @@ pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<i32> {
 
         "11100010" => { // LDH [c], a
             cpu.memory.write_byte(0xFF00 + cpu.bc.low as u16, cpu.af.high)?;
-            Ok(2)
+            cycles = 2;
         },
 
         "11100000" => { // LDH [imm8], a
             let addr = cpu.memory.fetch_byte()?;
             cpu.af.high = cpu.memory.read_byte(0xFF00 + addr as u16)?;
-            Ok(2)
+            cycles = 3;
         },
 
         "11101010" => { // LD [imm16], a
@@ -427,24 +459,24 @@ pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<i32> {
             if (0xFF00..=0xFFFF).contains(&addr) {
                 cpu.memory.write_byte(addr, cpu.af.high)?;
             }
-            Ok(4)
+            cycles = 4;
         },
 
         "11110010" => { // LDH a, [c]
             cpu.af.high = cpu.memory.read_byte(0xFF00 + cpu.bc.low as u16)?;
-            Ok(2)
+            cycles = 2;
         },
 
         "11110000" => { // LDH a, [imm8]
             let addr = cpu.memory.fetch_byte()?;
             cpu.af.high = cpu.memory.read_byte(0xFF00 + addr as u16)?;
-            Ok(3)
+            cycles = 3;
         },
 
         "11111010" => { // LD a, [imm16]
             let addr = cpu.memory.fetch_two_bytes()?;
             cpu.af.high = cpu.memory.read_byte(addr)?;
-            Ok(4)
+            cycles = 4;
         },
 
         "11101000" => { // ADD sp, imm8
@@ -462,12 +494,12 @@ pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<i32> {
             if half_carry {flags |= 0x20}
             cpu.hl.set_pair(result);
             cpu.af.low = flags;
-            Ok(3)
+            cycles = 3;
         },
 
         "11111001" => { // LD sp, hl
             cpu.memory.stack_pointer = cpu.hl.get_pair();
-            Ok(2)
+            cycles = 2;
         },
 
         "11110011" => { // DI
@@ -478,14 +510,16 @@ pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<i32> {
             todo!()
         },
 
-        _ => Err(anyhow!("Undefined opcode: {}", opcode))
+        _ => return Err(anyhow!("Undefined opcode: {}", opcode))
     }
+    Ok(cycles)
 }
 
 /// Block CB contains an assortment of instructions with 2 distinct decoding patterns.
 /// These instructions are only accessible using the prefix byte 0xCB.
 #[bitmatch]
 pub(super) fn blockcb(cpu: &mut CPU, opcode: u8) -> Result<i32> {
+    let mut cycles = 8;
     #[bitmatch]
     match opcode {
         "00000ooo" => { // RLC r8
@@ -532,8 +566,9 @@ pub(super) fn blockcb(cpu: &mut CPU, opcode: u8) -> Result<i32> {
             todo!()
         },
 
-        _ => Err(anyhow!("Undefined opcode: {}", opcode))
+        _ => return Err(anyhow!("Undefined opcode: {}", opcode))
     }
+    Ok(cycles)
 }
 
 // Add two unsigned 8-bit values, returning a tuple with the result and flags.
@@ -544,6 +579,17 @@ fn add8(lhs: u8, rhs: u8) -> (u8, u8) {
     let h = ((lhs & 0xF) + (rhs & 0xF)) >> 4;
     let z: u8 = match result {0 => 0, _ => 1};
     let flags = bitpack!("z0hc0000");
+    (result, flags)
+}
+
+// Subtract two unsigned 8-bit values, returning a tuple with the result and flags.
+#[bitmatch]
+fn sub8(lhs: u8, rhs: u8) -> (u8, u8) {
+    let result = lhs.wrapping_sub(rhs);
+    let c: u8 = match rhs > lhs {true => 1, false => 0};
+    let h: u8 = match (rhs & 0xF) > (lhs & 0xF) {true => 1, false => 0};
+    let z: u8 = match result {0 => 0, _ => 1};
+    let flags = bitpack!("z1hc0000");
     (result, flags)
 }
 
