@@ -44,8 +44,9 @@ impl CPU {
         self.memory.load_memory(buffer, ROM_ADDR)
     }
 
-    /// Performs one fetch-execute cycle
-    pub fn tick(&mut self) -> Result<i32> {
+    /// Performs one fetch-execute cycle.
+    /// Returns the passed time in machine cycles (4x the number of clock cycles).
+    pub fn fetch_execute(&mut self) -> Result<i32> {
         let opcode = self.memory.fetch_byte()?;
         let cycles = self.execute(opcode)? / 4;
         Ok(cycles)
