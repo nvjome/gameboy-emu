@@ -9,7 +9,7 @@ This repo is a Cargo workspace with two packages:
 
 ### gbcore
 
-Includes the CPU emulation core, memory, and registers. Provides an API for some frontend, including a framebuffer to diplay.
+Includes the CPU emulation core, memory, and registers. Provides an API for some frontend.
 
 ### app
 
