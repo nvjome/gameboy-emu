@@ -20,29 +20,29 @@ impl RegisterPair {
         self.low = (value & 0x00FF) as u8;
     }
 
-    pub fn incr_pair(&mut self) {
+    pub fn inc_pair(&mut self) {
         let val = self.get_pair();
         self.set_pair(val.wrapping_add(1));
     }
 
-    pub fn decr_pair(&mut self) {
+    pub fn dec_pair(&mut self) {
         let val = self.get_pair();
         self.set_pair(val.wrapping_sub(1));
     }
 
-    pub fn incr_high(&mut self) {
+    pub fn inc_high(&mut self) {
         self.high.wrapping_add(1);
     }
 
-    pub fn decr_high(&mut self) {
+    pub fn dec_high(&mut self) {
         self.high.wrapping_sub(1);
     }
 
-    pub fn incr_low(&mut self) {
+    pub fn inc_low(&mut self) {
         self.low.wrapping_add(1);
     }
 
-    pub fn decr_low(&mut self) {
+    pub fn dec_low(&mut self) {
         self.low.wrapping_sub(1);
     }
 }

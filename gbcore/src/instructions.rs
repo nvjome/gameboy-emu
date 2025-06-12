@@ -47,12 +47,12 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
                 2 => {
                     let addr = cpu.hl.get_pair();
                     cpu.memory.write_byte(addr, cpu.af.high)?;
-                    cpu.hl.incr_pair();
+                    cpu.hl.inc_pair();
                 },
                 3 => {
                     let addr = cpu.hl.get_pair();
                     cpu.memory.write_byte(addr, cpu.af.high)?;
-                    cpu.hl.decr_pair();
+                    cpu.hl.dec_pair();
                 }
                 _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", d, 2))
             }
@@ -64,11 +64,11 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
                 1 => cpu.af.set_pair(cpu.memory.read_two_bytes(cpu.de.get_pair())?),
                 2 => {
                     cpu.af.set_pair(cpu.memory.read_two_bytes(cpu.hl.get_pair())?);
-                    cpu.hl.incr_pair();
+                    cpu.hl.inc_pair();
                 },
                 3 => {
                     cpu.af.set_pair(cpu.memory.read_two_bytes(cpu.hl.get_pair())?);
-                    cpu.hl.decr_pair();
+                    cpu.hl.dec_pair();
                 },
                 _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", s, 2))
             }
@@ -81,11 +81,23 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
         },
 
         "00oo0011" => { // INC r16
-            todo!()
+            match o {
+                0 => cpu.bc.inc_pair(),
+                1 => cpu.de.inc_pair(),
+                2 => cpu.hl.inc_pair(),
+                3 => cpu.memory.stack_pointer += 1,
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", 0, 2))
+            }
         },
 
         "00oo1011" => { // DEC r16
-            todo!()
+            match o {
+                0 => cpu.bc.dec_pair(),
+                1 => cpu.de.dec_pair(),
+                2 => cpu.hl.dec_pair(),
+                3 => cpu.memory.stack_pointer -= 1,
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", 0, 2))
+            }
         },
 
         "00oo1001" => { // ADD hl, r16
@@ -101,11 +113,45 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
         },
 
         "11ooo100" => { // INC r8
-            todo!()
+            cycles = 1;
+            match o {
+                0 => (cpu.bc.high, cpu.af.low) = inc8(cpu.bc.high),
+                1 => (cpu.bc.low, cpu.af.low) = inc8(cpu.bc.low),
+                2 => (cpu.de.high, cpu.af.low) = inc8(cpu.de.high),
+                3 => (cpu.de.low, cpu.af.low) = inc8(cpu.de.low),
+                4 => (cpu.hl.high, cpu.af.low) = inc8(cpu.hl.high),
+                5 => (cpu.hl.low, cpu.af.low) = inc8(cpu.hl.low),
+                6 => {
+                    let addr = cpu.hl.get_pair();
+                    let (result, flags) = inc8(cpu.memory.read_byte(addr)?);
+                    cpu.memory.write_byte(addr, result)?;
+                    cpu.af.low = flags;
+                    cycles = 3;
+                },
+                7 => (cpu.af.high, cpu.af.low) = inc8(cpu.af.high),
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", o, 3))
+            }
         },
 
         "00ooo101" => { // DEC r8
-            todo!()
+            cycles = 1;
+            match o {
+                0 => (cpu.bc.high, cpu.af.low) = dec8(cpu.bc.high),
+                1 => (cpu.bc.low, cpu.af.low) = dec8(cpu.bc.low),
+                2 => (cpu.de.high, cpu.af.low) = dec8(cpu.de.high),
+                3 => (cpu.de.low, cpu.af.low) = dec8(cpu.de.low),
+                4 => (cpu.hl.high, cpu.af.low) = dec8(cpu.hl.high),
+                5 => (cpu.hl.low, cpu.af.low) = dec8(cpu.hl.low),
+                6 => {
+                    let addr = cpu.hl.get_pair();
+                    let (result, flags) = dec8(cpu.memory.read_byte(addr)?);
+                    cpu.memory.write_byte(addr, result)?;
+                    cpu.af.low = flags;
+                    cycles = 3;
+                },
+                7 => (cpu.af.high, cpu.af.low) = dec8(cpu.af.high),
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", o, 3))
+            }
         },
 
         "00ddd110" => { // LD r8, imm8
@@ -148,7 +194,7 @@ pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
 
         "00101111" => { // CPL
             cpu.af.high = !cpu.af.high;
-            cpu.af.low |= (SUB_FLAG & HALF_CARRY_FLAG);
+            cpu.af.low |= SUB_FLAG & HALF_CARRY_FLAG;
             cycles = 1;
         },
 
@@ -310,7 +356,18 @@ pub(super) fn block2(cpu: &mut CPU, opcode: u8) -> Result<i32> {
         },
 
         "10001ooo" => { // ADC a, r8
-            todo!()
+            let carry = ((cpu.af.low & CARRY_FLAG) != 0) as u8;
+            (cpu.af.high, cpu.af.low) = match o {
+                0 => adc8(cpu.af.high, cpu.bc.high, carry),
+                1 => adc8(cpu.af.high, cpu.bc.low, carry),
+                2 => adc8(cpu.af.high, cpu.de.high, carry),
+                3 => adc8(cpu.af.high, cpu.de.low, carry),
+                4 => adc8(cpu.af.high, cpu.hl.high, carry),
+                5 => adc8(cpu.af.high, cpu.hl.low, carry),
+                6 => {cycles = 2; adc8(cpu.af.high, cpu.memory.read_byte(cpu.hl.get_pair())?, carry)},
+                7 => adc8(cpu.af.high, cpu.af.high, carry),
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", o, 3))
+            }
         },
 
         "10010ooo" => { // SUB a, r8
@@ -328,7 +385,18 @@ pub(super) fn block2(cpu: &mut CPU, opcode: u8) -> Result<i32> {
         },
 
         "10011ooo" => { // SBC a, r8
-            todo!()
+            let carry = ((cpu.af.low & CARRY_FLAG) != 0) as u8;
+            (cpu.af.high, cpu.af.low) = match o {
+                0 => sbc8(cpu.af.high, cpu.bc.high, carry),
+                1 => sbc8(cpu.af.high, cpu.bc.low, carry),
+                2 => sbc8(cpu.af.high, cpu.de.high, carry),
+                3 => sbc8(cpu.af.high, cpu.de.low, carry),
+                4 => sbc8(cpu.af.high, cpu.hl.high, carry),
+                5 => sbc8(cpu.af.high, cpu.hl.low, carry),
+                6 => {cycles = 2; sbc8(cpu.af.high, cpu.memory.read_byte(cpu.hl.get_pair())?, carry)},
+                7 => sbc8(cpu.af.high, cpu.af.high, carry),
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", o, 3))
+            }
         },
 
         "10100ooo" => { // AND a, r8
@@ -648,5 +716,25 @@ fn add16(lhs: u16, rhs: u16) -> (u16, u8) {
     let h = ((lhs & 0xFFF) + (rhs & 0xFFF)) >> 12;
     // let z: u8 = match result {0 => 0, _ => 1};
     let flags = bitpack!("00hc0000");
+    (result, flags)
+}
+
+// Increment an 8-bit value with wrapping, returning a tuple with the result and flags.
+#[bitmatch]
+fn inc8(arg: u8) -> (u8, u8) {
+    let result = arg.wrapping_add(1);
+    let h = ((arg & 0xF) == 0xF) as u8;
+    let z: u8 = match result {0 => 0, _ => 1};
+    let flags = bitpack!("z0h00000");
+    (result, flags)
+}
+
+// Increment an 8-bit value with wrapping, returning a tuple with the result and flags.
+#[bitmatch]
+fn dec8(arg: u8) -> (u8, u8) {
+    let result = arg.wrapping_sub(1);
+    let h = ((arg & 0xF) == 0x0) as u8;
+    let z: u8 = match result {0 => 0, _ => 1};
+    let flags = bitpack!("z0h00000");
     (result, flags)
 }
