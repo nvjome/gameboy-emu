@@ -20,6 +20,8 @@ pub struct CPU {
     de: RegisterPair,
     hl: RegisterPair,
     memory: Memory,
+    ime: bool,
+    set_ime: i32,
 }
 
 impl Default for CPU {
@@ -36,6 +38,8 @@ impl CPU {
             de: RegisterPair::new(),
             hl: RegisterPair::new(),
             memory: Memory::new(0, 0),
+            ime: false,
+            set_ime: 0,
         }
     }
 
@@ -44,11 +48,22 @@ impl CPU {
         self.memory.load_memory(buffer, ROM_ADDR)
     }
 
-    /// Performs one fetch-execute cycle.
-    /// Returns the passed time in machine cycles (4x the number of clock cycles).
-    pub fn fetch_execute(&mut self) -> Result<i32> {
+    /// Performs one fetch-execute cycle, including interrupt handling.
+    /// Returns the machine cycles completed (4x the number of clock cycles).
+    pub fn cycle(&mut self) -> Result<i32> {
         let opcode = self.memory.fetch_byte()?;
         let cycles = self.execute(opcode)? / 4;
+
+        // EI does not actually set IME until after the next instruction.
+        // EI sets set_ime to the number of cycles to delay setting IME.
+        // DI clears ime immediately and forces set_ime to -1 to bypass this check.
+        if self.set_ime > 0 {
+            self.set_ime -= 1;
+        } else if self.set_ime == 0 {
+            self.ime = true;
+            self.set_ime = -1;
+        }
+
         Ok(cycles)
     }
 

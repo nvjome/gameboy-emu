@@ -4,6 +4,7 @@
 //! Block 1 and 2 are easy and easily decoded. Blocks 0 and 3, not so much...
 //! Luckily, the bitmatch crate can help with the pattern matching!
 //! The efficiency impact of this is uncertain, but it sure is convenient.
+//! Functions return the passed time in machine cycles.
 
 use crate::CPU;
 use anyhow::{anyhow, Result};
@@ -15,7 +16,6 @@ const HALF_CARRY_FLAG: u8 = 1 << 5;
 const CARRY_FLAG: u8 = 1 << 4;
 
 /// Block 0 contains an assortment of instructions.
-/// Returns the passed time in machine cycles.
 #[bitmatch]
 pub(super) fn block0(cpu: &mut CPU, opcode: u8) -> Result<i32> {
     let mut cycles = 2;
@@ -412,7 +412,17 @@ pub(super) fn block2(cpu: &mut CPU, opcode: u8) -> Result<i32> {
         },
 
         "10111ooo" => { // CP a, r8
-            todo!()
+            (_, cpu.af.low) = match o {
+                0 => sub8(cpu.af.high, cpu.bc.high),
+                1 => sub8(cpu.af.high, cpu.bc.low),
+                2 => sub8(cpu.af.high, cpu.de.high),
+                3 => sub8(cpu.af.high, cpu.de.low),
+                4 => sub8(cpu.af.high, cpu.hl.high),
+                5 => sub8(cpu.af.high, cpu.hl.low),
+                6 => {cycles = 2; sub8(cpu.af.high, cpu.memory.read_byte(cpu.hl.get_pair())?)},
+                7 => sub8(cpu.af.high, cpu.af.high),
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", o, 3))
+            };
         },
 
         _ => return Err(anyhow!("Undefined opcode: {}", opcode))
@@ -423,29 +433,25 @@ pub(super) fn block2(cpu: &mut CPU, opcode: u8) -> Result<i32> {
 /// Block 3 again contains an assortment of instructions.
 #[bitmatch]
 pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<i32> {
-    let mut cycles = 1;
+    let mut cycles = 2;
     #[bitmatch]
     match opcode {
         "11000110" => { // ADD a, imm8
             (cpu.af.high, cpu.af.low) = add8(cpu.af.high, cpu.memory.fetch_byte()?);
-            cycles = 2;
         },
 
         "11001110" => { // ADC a, imm8
             let carry = ((cpu.af.low & CARRY_FLAG) != 0) as u8;
             (cpu.af.high, cpu.af.low) = adc8(cpu.af.high, cpu.memory.fetch_byte()?, carry);
-            cycles = 2;
         },
 
         "11010110" => { // SUB a, imm8
             (cpu.af.high, cpu.af.low) = sub8(cpu.af.high, cpu.memory.fetch_byte()?);
-            cycles = 2;
         },
 
         "11011110" => { // SBC a, imm8
             let carry = ((cpu.af.low & CARRY_FLAG) != 0) as u8;
             (cpu.af.high, cpu.af.low) = sbc8(cpu.af.high, cpu.memory.fetch_byte()?, carry);
-            cycles = 2;
         },
 
         "11100110" => { // AND a, imm8
@@ -461,19 +467,31 @@ pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<i32> {
         },
 
         "11111110" => { // CP a, imm8
-            todo!()
+            (_, cpu.af.low) = sub8(cpu.af.high, cpu.memory.fetch_byte()?);
         },
 
-        "110ccc000" => { // RET cond
-            todo!()
+        "110cc000" => { // RET cond
+            cycles = 5;
+            match (c, cpu.af.low) {
+                (0, f) if (f & ZERO_FLAG == 0) => cpu.memory.program_counter = cpu.memory.pop_stack()?,
+                (1, f) if (f & ZERO_FLAG > 0) => cpu.memory.program_counter = cpu.memory.pop_stack()?,
+                (2, f) if (f & CARRY_FLAG == 0) => cpu.memory.program_counter = cpu.memory.pop_stack()?,
+                (3, f) if (f & CARRY_FLAG > 0) => cpu.memory.program_counter = cpu.memory.pop_stack()?,
+                (0..=3, _) => cycles = 2,
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", c, 2))
+            }
         },
 
         "11001001" => { // RET
-            todo!()
+            cpu.memory.program_counter = cpu.memory.pop_stack()?;
+            cycles = 4;
         },
 
         "11011001" => { // RETI
-            todo!()
+            cpu.memory.program_counter = cpu.memory.pop_stack()?;
+            cpu.ime = true;
+            cpu.set_ime = -1;
+            cycles = 4;
         },
 
         "110cc010" => { // JP cond, imm16
@@ -484,7 +502,7 @@ pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<i32> {
                 (1, f) if (f & ZERO_FLAG > 0) => cpu.memory.program_counter = addr,
                 (2, f) if (f & CARRY_FLAG == 0) => cpu.memory.program_counter = addr,
                 (3, f) if (f & CARRY_FLAG > 0) => cpu.memory.program_counter = addr,
-                (0..=3, _) =>cycles = 3,
+                (0..=3, _) => cycles = 3,
                 _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", c, 2))
             }
         },
@@ -496,18 +514,46 @@ pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<i32> {
 
         "11101001" => { // JP hl
             cpu.memory.program_counter = cpu.hl.get_pair();
+            cycles = 1;
         },
 
         "110cc100" => { // CALL cond, imm16
-            todo!()
+            let pc = cpu.memory.program_counter;
+            let addr = cpu.memory.fetch_two_bytes()?;
+            cycles = 6;
+            match (c, cpu.af.low) {
+                (0, f) if (f & ZERO_FLAG == 0) => {
+                    cpu.memory.push_stack(pc)?;
+                    cpu.memory.program_counter = addr;
+                },
+                (1, f) if (f & ZERO_FLAG > 0) => {
+                    cpu.memory.push_stack(pc)?;
+                    cpu.memory.program_counter = addr;
+                },
+                (2, f) if (f & CARRY_FLAG == 0) => {
+                    cpu.memory.push_stack(pc)?;
+                    cpu.memory.program_counter = addr;
+                },
+                (3, f) if (f & CARRY_FLAG > 0) => {
+                    cpu.memory.push_stack(pc)?;
+                    cpu.memory.program_counter = addr;
+                },
+                (0..=3, _) => cycles = 3,
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", c, 2))
+            }
         },
 
         "11001101" => { // CALL imm16
-            todo!()
+            cpu.memory.push_stack(cpu.memory.program_counter)?;
+            cpu.memory.program_counter = cpu.memory.fetch_two_bytes()?;
+            cycles = 6;
         },
 
         "11ttt111" => { // RST tgt3
-            todo!()
+            let addr = t << 3;
+            cpu.memory.push_stack(cpu.memory.program_counter)?;
+            cpu.memory.program_counter = addr as u16;
+            cycles = 4;
         },
 
         "11rr0001" => { // POP r16stk
@@ -571,7 +617,17 @@ pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<i32> {
         },
 
         "11101000" => { // ADD sp, imm8
-            todo!()
+            let val = cpu.memory.fetch_byte()? as i8 as i16;
+            let sp = cpu.memory.stack_pointer;
+            let result = sp.wrapping_add_signed(val);
+            let carry = (sp & 0xFF) + (val as u16 & 0xFF) > 0xFF;
+            let half_carry = (sp & 0xF) + (val as u16 & 0xF) > 0xF;
+            let mut flags = 0;
+            if carry {flags |= 0x10}
+            if half_carry {flags |= 0x20}
+            cpu.memory.stack_pointer = result;
+            cpu.af.low = flags;
+            cycles = 4;
         },
 
         "11111000" => { // LD hl, sp + imm8
@@ -590,15 +646,17 @@ pub(super) fn block3(cpu: &mut CPU, opcode: u8) -> Result<i32> {
 
         "11111001" => { // LD sp, hl
             cpu.memory.stack_pointer = cpu.hl.get_pair();
-            cycles = 2;
         },
 
         "11110011" => { // DI
-            todo!()
+            cpu.ime = false;
+            cpu.set_ime = -1;
+            cycles = 1;
         },
 
         "11111011" => { // EI
-            todo!()
+            cpu.set_ime = 1;
+            cycles = 1;
         },
 
         _ => return Err(anyhow!("Undefined opcode: {}", opcode))
@@ -638,23 +696,82 @@ pub(super) fn blockcb(cpu: &mut CPU, opcode: u8) -> Result<i32> {
         },
 
         "00110ooo" => { // SWAP r8
-            todo!()
+            cycles = 2;
+            match o {
+                0 => swap8(cpu.bc.high),
+                1 => swap8(cpu.bc.low),
+                2 => swap8(cpu.de.high),
+                3 => swap8(cpu.de.low),
+                4 => swap8(cpu.hl.high),
+                5 => swap8(cpu.hl.low),
+                6 => {cycles = 4; swap8(cpu.memory.read_byte(cpu.hl.get_pair())?)},
+                7 => swap8(cpu.af.high),
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", o, 3))
+            };
         },
 
         "00111ooo" => { // SRL r8
             todo!()
         },
 
-        "01iiiooo" => { // BIT b3, r8
-            todo!()
+        "01bbbooo" => { // BIT b3, r8
+            cycles = 2;
+            let bit = 1 << b;
+            let val = match o {
+                0 => cpu.bc.high,
+                1 => cpu.bc.low,
+                2 => cpu.de.high,
+                3 => cpu.de.low,
+                4 => cpu.hl.high,
+                5 => cpu.hl.low,
+                6 => {cycles = 3; cpu.memory.read_byte(cpu.hl.get_pair())?},
+                7 => cpu.af.high,
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", o, 3))
+            };
+            let z = (val & bit == 0) as u8;
+            cpu.af.low = bitpack!("z0100000");
         },
 
-        "10iiiooo" => { // RES b3, r8
-            todo!()
+        "10bbbooo" => { // RES b3, r8
+            cycles = 2;
+            let bit = !(1 << b);
+            match o {
+                0 => cpu.bc.high &= bit,
+                1 => cpu.bc.low &= bit,
+                2 => cpu.de.high &= bit,
+                3 => cpu.de.low &= bit,
+                4 => cpu.hl.high &= bit,
+                5 => cpu.hl.low &= bit,
+                6 => {
+                    let addr = cpu.hl.get_pair();
+                    let val = cpu.memory.read_byte(addr)?;
+                    cpu.memory.write_byte(addr, val & bit)?;
+                    cycles = 4;
+                },
+                7 => cpu.af.high &= bit,
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", o, 3))
+            }
         },
 
-        "11iiiooo" => { // SET b3, r8
-            todo!()
+        "11bbbooo" => { // SET b3, r8
+            cycles = 2;
+            let bit = 1 << b;
+            match o {
+                0 => cpu.bc.high |= bit,
+                1 => cpu.bc.low |= bit,
+                2 => cpu.de.high |= bit,
+                3 => cpu.de.low |= bit,
+                4 => cpu.hl.high |= bit,
+                5 => cpu.hl.low |= bit,
+                6 => {
+                    let addr = cpu.hl.get_pair();
+                    let val = cpu.memory.read_byte(addr)?;
+                    cpu.memory.write_byte(addr, val | bit)?;
+                    cycles = 4;
+                },
+                7 => cpu.af.high |= bit,
+                _ => return Err(anyhow!("Somehow extracted the value {} from {} bits. Impossible!", o, 3))
+            }
         },
 
         _ => return Err(anyhow!("Undefined opcode: {}", opcode))
@@ -737,4 +854,9 @@ fn dec8(arg: u8) -> (u8, u8) {
     let z: u8 = match result {0 => 0, _ => 1};
     let flags = bitpack!("z0h00000");
     (result, flags)
+}
+
+// Swap upper and lower nibbles of an 8-bit value
+fn swap8(arg: u8) -> u8 {
+    ((arg & 0xF) << 4) | (arg >> 4)
 }
